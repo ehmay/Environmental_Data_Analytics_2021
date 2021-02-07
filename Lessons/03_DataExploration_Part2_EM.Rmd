@@ -138,6 +138,8 @@ ggplot(USGS.flow.data) +
 #
 ggplot(USGS.flow.data) +
   geom_boxplot(aes(x = gage.height.mean, y = discharge.mean, group = cut_width(gage.height.mean, 1)))
+#group and cut_width determine how we 'slice' the data, similar to a histo
+#instead of showing how many records fall into each slice, it shows the distribution of values within each slice 
 
 #
 ggplot(USGS.flow.data) +
@@ -155,11 +157,14 @@ ggplot(USGS.flow.data) +
 
 ggplot(USGS.flow.data) +
   geom_point(aes(x = datetime, y = discharge.mean))
+#datetime is kind of a hybrid bw categorical and continuous data
+#showing mean discharge at diff times
+#gap is a time period when we have no data for this site
 ```
 
 Question: under what circumstances would it be beneficial to use each of these graph types (bar plot, histogram, frequency polygon, box-and whisker, violin, scatterplot)?
 
-> Answer: 
+> Answer:  
 
 ## Ending discussion
 
