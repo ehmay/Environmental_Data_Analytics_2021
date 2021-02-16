@@ -17,7 +17,7 @@ editor_options:
 
 ```{r, message = FALSE}
 getwd()
-library(dplyr)
+library(plyr)
 library(tidyverse)
 library(lubridate)
 NTL.phys.data.PeterPaul <- read.csv("./Data/Processed/NTL-LTER_Lake_ChemistryPhysics_PeterPaul_Processed.csv")
@@ -101,19 +101,24 @@ NTL.nutrient.data.PeterPaul.gathered <- pivot_longer(NTL.nutrient.data.PeterPaul
 NTL.nutrient.data.PeterPaul.gathered <- subset(NTL.nutrient.data.PeterPaul.gathered, !is.na(concentration))
 count(NTL.nutrient.data.PeterPaul.gathered, nutrient)
 #lots of NAs in the concentration values so want to get rid of those NAs - this will lower the number of rows in the dataframe
+#count above shows you how many concentrations we have for each nutrient
 
 write.csv(NTL.nutrient.data.PeterPaul.gathered, row.names = FALSE, 
           file = "./Data/Processed/NTL-LTER_Lake_Nutrients_PeterPaulGathered_Processed.csv")
+#store processed dataset to a new file - do this with every major step
 
 # Spread nutrient data into separate columns
 #NTL.nutrient.data.PeterPaul.spread <- spread(NTL.nutrient.data.PeterPaul.gathered, nutrient, concentration)
 
 # Spread nutrient data into separate columns using pivot_wider
 NTL.nutrient.data.PeterPaul.spread2 <- pivot_wider(NTL.nutrient.data.PeterPaul.gathered, names_from = nutrient, values_from = concentration)
+#above: basically opp of what we did with pivot_longer. note this has 2 fewer rows than the dataset we used to make the pivot_longer dataframe. likely bc of our removal of NAs
 
 # Split components of cells into multiple columns
 # Opposite of 'separate' is 'unite'
 NTL.nutrient.data.PeterPaul.dates <- separate(NTL.nutrient.data.PeterPaul.subset, sampledate, c("Y", "m", "d"))
+#tell dataframe which column you want to separate and then provide the format to be separated into (bc rn the date is in %Y%-%m%-%d%)
+#unite does the opposite of separate - bring together multiple columns into 1
 
 # I recommend using lubridate rather than separate and unite.
 
@@ -160,9 +165,11 @@ However, there are 20 months in this dataset, so importing all these files indiv
 ```{r}
 LitterFiles = list.files(path = "./Data/Raw/NIWO_Litter/", pattern="*.csv", full.names=TRUE)
 LitterFiles
+#above imports all csv files within the folder indicated in the path
 
 Litter <- LitterFiles %>%
   ldply(read.csv)
+#used ldply to create a new dataframe that is made up of all csv files in LitterFiles list of files by binding them via rows
 ```
 
 We also have information about individual traps, including the location and type of landcover. Let's join these two datasets. Note that "siteID", "plotID" and "trapID" exist in both datasets, and we can join them by these conditions. Notice the dimensions of the final dataset.
@@ -176,6 +183,7 @@ dim(LitterTrap)
 
 LitterTrap <- LitterTrap %>%
   select(plotID:trapID, collectDate, functionalGroup:qaDryMass, subplotID:geodeticDatum)
+#think about which columns we need for analysis. we select these above
 
 write.csv(LitterTrap, row.names = FALSE, 
           file ="./Data/Processed/NEON_NIWO_Litter_mass_trap_Processed.csv")
@@ -187,16 +195,16 @@ dplyr functionality, combined with the pipes operator, allows us to split datase
 
 ```{r}
 NTL.PeterPaul.summaries <- 
-  NTL.phys.nutrient.data.PeterPaul %>%
-  filter(depth == 0) %>%
-  group_by(lakename, month) %>%
-  filter(!is.na(temperature_C) & !is.na(tn_ug) & !is.na(tp_ug)) %>%
+  NTL.phys.nutrient.data.PeterPaul %>% #choose data
+  filter(depth == 0) %>% #filter by depth
+  group_by(lakename, month) %>% #group by lake name and month
+  filter(!is.na(temperature_C) & !is.na(tn_ug) & !is.na(tp_ug)) %>% #filter out NAs - only choosing rows where all 3 of these columns don't have NAs
   summarise(meantemp = mean(temperature_C), 
             sdtemp = sd(temperature_C), 
             meanTN = mean(tn_ug), 
             sdTN = sd(tn_ug), 
             meanTP = mean(tp_ug), 
-            sdTP = sd(tp_ug))
+            sdTP = sd(tp_ug)) #telling R what we want from cleaned up data
 
 write.csv(NTL.PeterPaul.summaries, row.names = FALSE, 
           file ="./Data/Processed/NTL-LTER_Lake_Summaries_PeterPaul_Processed.csv")
