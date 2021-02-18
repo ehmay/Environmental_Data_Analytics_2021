@@ -5,6 +5,10 @@ output: pdf_document
 geometry: margin=2.54cm
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE,tidy.opts = list(width.cutoff=80), 
+                      tidy=FALSE)
+```
 ## OVERVIEW
 
 This exercise accompanies the lessons in Environmental Data Analytics on Data Wrangling 
@@ -30,27 +34,26 @@ setwd("~/Desktop/ENV872/Environmental.Data.Analytics.2021")
 library(tidyverse)
 library(lubridate)
 library(stringi)
-Ozone.18 <- read.csv("../Data/Raw/EPAair_O3_NC2018_raw.csv", header=TRUE)
-Ozone.19 <- read.csv("../Data/Raw/EPAair_O3_NC2019_raw.csv", header=TRUE)
-PM.18 <- read.csv("../Data/Raw/EPAair_PM25_NC2018_raw.csv", header=TRUE)
-PM.19 <- read.csv("../Data/Raw/EPAair_PM25_NC2019_raw.csv", header=TRUE)
+Ozone.18 <- read.csv("./Data/Raw/EPAair_O3_NC2018_raw.csv", header=TRUE)
+Ozone.19 <- read.csv("./Data/Raw/EPAair_O3_NC2019_raw.csv", header=TRUE)
+PM.18 <- read.csv("./Data/Raw/EPAair_PM25_NC2018_raw.csv", header=TRUE)
+PM.19 <- read.csv("./Data/Raw/EPAair_PM25_NC2019_raw.csv", header=TRUE)
 #2
 dim(Ozone.18)
 colnames(Ozone.18)
-str(Ozone.18)
+str(Ozone.18, width=80, strict.width="cut")
 
 dim(Ozone.19)
 colnames(Ozone.19)
-str(Ozone.19)
+str(Ozone.19, width=80, strict.width="cut")
 
 dim(PM.18)
 colnames(PM.18)
-str(PM.18)
+str(PM.18, width=80, strict.width="cut")
 
 dim(PM.19)
 colnames(PM.19)
-str(PM.19)
-
+str(PM.19, width=80, strict.width="cut")
 ```
 
 ## Wrangle individual datasets to create processed files.
@@ -180,11 +183,10 @@ EPA.wrangled.sum1 <- EPA.wrangled.sum %>%
 EPA.wrangled.sum2 <- EPA.wrangled.sum %>%
   drop_na(Month:Year)
 
-
 #13
 dim(EPA.wrangled.sum2)
 ```
 
 14. Why did we use the function `drop_na` rather than `na.omit`?
 
-> Answer: Here, the original summary dataframe without using any NA functions has 308 rows. There are NA values in columns other than Month and Year, but none in those two date columns. When we use na.omit, even though we can write code to try to specify that it should be used only on the Month and Year columns, we end up removing all rows with any values of NA, regardless of which column the NAs are in (leaving us with 101 rows). Conversely, when we use drop_na, we are able to target the two specific columns, leaving us with the same number of rows as the original dataframe. Na.omit removes all rows with NA values from the dataframe, while drop_na only removes rows with NA values in the columns specified in the code. I am, admittedly, a bit confused about this result, as I thought that na.omit did not remove NAs (just omitted them) versus drop_na does remove NA values. 
+> Answer: Here, the original summary dataframe without using any NA functions has 308 rows. There are NA values in columns other than Month and Year, but none in those two date columns. When we use na.omit, even though we can write code to try to specify that it should be used only on the Month and Year columns, we end up removing all rows with any values of NA, regardless of which column the NAs are in (leaving us with 101 rows). Conversely, when we use drop_na, we are able to target the two specific columns, leaving us with the same number of rows as the original dataframe. Na.omit removes all rows with NA values from the dataframe, while drop_na only removes rows with NA values in the columns specified in the code. I am, admittedly, a bit confused about this result, as I thought that we would choose drop over omit because na.omit did not remove NAs (just omitted them) versus drop_na does remove NA values. 
