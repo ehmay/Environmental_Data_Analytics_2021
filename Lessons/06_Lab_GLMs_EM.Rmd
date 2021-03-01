@@ -18,7 +18,10 @@ editor_options:
 ## Set up
 ```{r, message = FALSE}
 library(tidyverse)
-library(agricolae)   
+library(agricolae) 
+library(ggplot2)
+library(corrplot)
+library(ggpubr)
 
 PeterPaul.chem.nutrients <- read.csv("./Data/Processed/NTL-LTER_Lake_Chemistry_Nutrients_PeterPaul_Processed.csv", stringsAsFactors = TRUE)
 # Set date to date format
@@ -86,9 +89,12 @@ ggplot(EPAair, aes(x = Ozone)) +
 qqnorm(EPAair$Ozone); qqline(EPAair$Ozone)
 #quantiles are veering off the straight line in second half
 
+#run t test to check our hypothesis. alternative can be less, greater, or two sided. doing t test bc we don't have normal distr.
 O3.onesample <- t.test(EPAair$Ozone, mu = 50, alternative = "less")
 O3.onesample
+#reject H0 - mean is not 50 - it is less than 50.
 
+#better visualizing data:
 Ozone.plot <- ggplot(EPAair, aes(x = Ozone)) +
   #geom_density(stat = "count", fill = "gray") +
   geom_density(fill = "gray") +
@@ -106,23 +112,28 @@ Write a sentence or two about the results of this test. Include both the results
 The two-sample *t* test is used to test the hypothesis that the mean of two samples is equivalent. Unlike the one-sample tests, a two-sample test requires a second assumption that the variance of the two groups is equivalent. Are Ozone levels different between 2018 and 2019?
 
 ```{r}
+#look for normal distr.
 shapiro.test(EPAair$Ozone[EPAair$Year == 2018])
 shapiro.test(EPAair$Ozone[EPAair$Year == 2019])
+#neither year's data is normally distributed
 
 #p-value less than 0.05 then reject null for 2018 and 2019 i.e. data do not follow normal distribution
 
 #Compare variance using F-test (only)
 var.test(EPAair$Ozone ~ EPAair$Year)
+#ratio of variances is not = to 1.
 
 #p-value less than 0.05 then reject null for 2018 and 2019 i.e. true ratio not equal to one
 
 ggplot(EPAair, aes(x = Ozone, color = as.factor(Year))) +
   geom_freqpoly()
+#looks like 2018 levels were < 2019 levels
 
 # Format as a t-test
 O3.twosample <- t.test(EPAair$Ozone ~ EPAair$Year)
 O3.twosample
 O3.twosample$p.value
+#means are statistically different based on p value
 
 # Format as a GLM
 O3.twosample2 <- lm(EPAair$Ozone ~ EPAair$Year)
@@ -155,6 +166,9 @@ Create three plots, each with appropriately formatted axes and legends. Choose a
 ```{r}
 #Exercise 2:
 
+ggplot(EPAair, aes(x = Ozone, apha=Year)) +
+         geom_density()
+
 
 ```
 
@@ -168,11 +182,20 @@ For the NTL-LTER dataset, can we predict PM2.5 from Ozone?
 
 #Exercise 3: Run a linear regression PM2.5 by Ozone. Find the p-value and R-squared value. 
 
-
+O.PM <- lm(data=EPAair, PM2.5~Ozone)
+summary(O.PM)
+#p = 2.2e-16
+#R sqrd = 13
 
 #Exercise 4: Build a scatterplot. Add a line and standard error for the linear regression. Add the regression equation to the plot
 
+air.plot <- ggplot(EPAair, aes(x=Ozone, y=PM2.5)) +
+  geom_smooth(method="lm") +
+  stat_regline_equation(formula=EPAair$PM2.5~EPAair$Ozone) +
+  geom_point() 
+#how to add regression equation??
 
+print(air.plot)
 
 ```
 
@@ -184,13 +207,23 @@ What other variables can we add to improve model?
 ```{r}
 
 #Exercise 5: Build correlation plots and identify more possible explanatory variables to add to the regression.
+air2 <- EPAair %>%
+  select(Month, Year, SITE_LATITUDE, SITE_LONGITUDE) %>%
+  na.omit()
+EPAcorr <- cor(air2)
+corrplot(EPAcorr, method = "ellipse")
 
 
-
+EPAair.subset <- EPAair %>%
+  select(SITE_LATITUDE:PM2.5) %>%
+  na.omit()
+EPAairCorr <- cor(EPAair.subset)
+corrplot(EPAairCorr, method="ellipse")
+corrplot.mixed(EPAairCorr, method = "ellipse")
 
 #Exercise 6: Choose a model by AIC in a Stepwise Algorithm. Do the results from AIC match the variables you selected on Exercise 5?
-
-
+OzonebyALL.regress <- lm(data=EPAair.subset, PM2.5~Ozone + Month + SITE_LATITUDE + SITE_LONGITUDE)
+summary(OzonebyALL.regress)
 
 
 #Exercise 7: Run another regression using the variables selected on Exercise 6. Compare r-squared value withthe one from Exercise 5. 

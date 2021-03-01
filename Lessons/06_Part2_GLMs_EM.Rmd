@@ -15,8 +15,11 @@ editor_options:
 ## Set up
 ```{r, message = FALSE}
 getwd()
+library(ggplot2)
 library(tidyverse)
-#install.packages("agricolae")
+install.packages("agricolae")
+install.packages("htmltools")
+library(htmltools)
 library(agricolae)   #you may need to install/update package "htmltools" before installing and loading agricolae
 
 Litter <- read.csv("./Data/Processed/NEON_NIWO_Litter_mass_trap_Processed.csv", stringsAsFactors = TRUE)
@@ -105,6 +108,8 @@ TukeyHSD(Litter.Totals.anova)
 # Extract groupings for pairwise relationships
 Litter.Totals.groups <- HSD.test(Litter.Totals.anova, "plotID", group = TRUE)
 Litter.Totals.groups
+#letters in groups help you categorize your dataset and find which levels share the same mean and could be in the same treatment group
+#everything with an 'a' has statistically similar means. could filter dataset to see only the sites that contain an 'a' - results of running this new filtered dataset in anova will show that their means are not significantly different. if a site has 'abcd' it could be grouped (bc of similar means) with other sites containing a, b, c, and/or d (basically, you fit the equal means assumption of the anova if you group levels together based on letters they share.) <- think of it like a venn diagram
 
 # Graph the results
 Litter.Totals.plot <- ggplot(Litter.Totals, aes(x = plotID, y = dryMass)) +
@@ -116,11 +121,12 @@ Litter.Totals.plot <- ggplot(Litter.Totals, aes(x = plotID, y = dryMass)) +
   labs(x = "Plot ID", y = "Dry Mass (g)") +
   ylim(0, 85)
 print(Litter.Totals.plot)
+ 
 ```
 
 What information does the output give us? How might we report this information in a report?
 
-> 
+> need to reorder sites so they're in the same order as the groups list from HSD test so we can better see changes in mean
 
 ## TWO-WAY ANOVA
 ### Main effects
@@ -130,10 +136,12 @@ A two-way ANOVA allows us to examine the effects of two categorical explanatory 
 # Format as aov
 Litter.anova.2way <- aov(data = Litter, dryMass ~ functionalGroup + nlcdClass)
 summary(Litter.anova.2way)
+#df for residuals is associated w number of observations we have (total obs - other dfs - 1)
 
 # Format as lm
 Litter.anova.2way2 <- lm(data = Litter, dryMass ~ functionalGroup + nlcdClass)
 summary(Litter.anova.2way2)
+#gives same overall results as aov - both point to differences in means.
 
 # Run a post-hoc test for pairwise differences
 TukeyHSD(Litter.anova.2way)
@@ -149,6 +157,8 @@ The output gives test statistics for each explanatory variable as well as the in
 # Format as aov
 Litter.anova.2way3 <- aov(data = Litter, dryMass ~ functionalGroup * nlcdClass)
 summary(Litter.anova.2way3)
+#p value <0.05 suggests an interaction bw vars is sig
+#suggests there is a significant interaction bw functional group and NLCD class
 
 # Format as lm
 Litter.anova.2way4 <- lm(data = Litter, dryMass ~ functionalGroup * nlcdClass)
@@ -161,11 +171,14 @@ If the interaction is significant, we interpret pairwise differences for the int
 # Run a post-hoc test for pairwise differences
 TukeyHSD(Litter.anova.2way3)
 
+#create treatment groups via the interaction that's significant:
 Litter.interaction <- with(Litter, interaction(functionalGroup, nlcdClass))
+#above is a factor w 24 levels
 
 #Litter.test <- cbind(Litter,Litter.interaction)
 
 Litter.anova.2way5 <- aov(data = Litter, dryMass ~ Litter.interaction)
+#one way anova but the explan is a result of an interaction bw 2 cat variables
 
 Litter.groups <- HSD.test(Litter.anova.2way5, "Litter.interaction", group = TRUE)
 Litter.groups
@@ -177,5 +190,7 @@ Litter.anova.plot <- ggplot(Litter, aes(y = dryMass, x = nlcdClass, color = func
   geom_boxplot()
 print(Litter.anova.plot)
 
+
+#edit graph to make it more visually appealing and add letters like in 1 way anova to represent statistical grouping
 ```
 
