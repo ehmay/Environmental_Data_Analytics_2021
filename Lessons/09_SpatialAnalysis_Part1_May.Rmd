@@ -109,9 +109,14 @@ myMap = mapview(EPAair_PM_avg,
          ycol = "SITE_LATITUDE", 
          crs = 4269, 
          grid = FALSE)
+#^this is like setting mytheme
 
 #Show the map
 myMap
+
+#this is the same plot (in terms of point) as above but on an actual map, which you can zoom in on bc map is connected to web. if you click on a point on the map you see its attributes (geometry and other attributes)
+
+#go to stacked layers on the left side of map to change map background layer
 
 #Save the map (if you want) [Currently not working: https://github.com/r-spatial/mapview/issues/312]
 #mapshot(myMap, file='EPA_SiteMap.jpeg')  #Save to a PNG file
@@ -126,6 +131,8 @@ See <http://rstudio.github.io/leaflet/> for more info
 
 ```{r plot.with.leaflet}
 
+#leaflet is similar, a bit more tidy than mapview. also more complex but gives you more capability. add tiles for what map will look like and can change what data points look like
+
 #Create the map and add Tiles
 myMap  <- leaflet(data=EPAair_PM_avg) %>% 
   addTiles() %>% 
@@ -134,6 +141,10 @@ myMap  <- leaflet(data=EPAair_PM_avg) %>%
                    stroke = FALSE, 
                    fillOpacity = 0.3,
                    popup = ~as.character(`Site.Name`))
+
+#can add popups to show things like site names on the map
+#made radius of points to be based on mean concentration
+
 #Show the map
 myMap
 ```
@@ -208,17 +219,24 @@ This is precisely why we use the `sf` package, storing geometries as "spatial fe
 First, let's convert our EPA dataframe to a simple features ("sf") dataframe and explore what's different. The key command here is the `st_as_sf()` function. Note what the inputs to this function are...
 
 ```{r Create simple features from lat/lng fields}
+#engaging sf package
+
+#st_as_af is similar to as.dataframe
+
+#have to specify geometric coordinates
 
 #Convert the dataset to a spatially enabled "sf" data frame
 sf_EPAair_PM_avg <- st_as_sf(EPAair_PM_avg,
                              coords = c('SITE_LONGITUDE','SITE_LATITUDE'),
                              crs=4326)
+#we've lost a variable from original df --> lat and long are gone, have been combined into new 'geometry' column
 
-#Do you see a new column name?                
+#Do you see a new column name? --> geometry col                
 colnames(sf_EPAair_PM_avg)
 
 #What is the class of the values in the geometry column?
 class(sf_EPAair_PM_avg$geometry)
+#2 classes ^ : general object and also a special case of this general object. gen obj = sf, specific geometric type = point
 
 #What does this look like
 head(sf_EPAair_PM_avg)
@@ -226,8 +244,11 @@ head(sf_EPAair_PM_avg)
 #Plot the geometry...
 plot(sf_EPAair_PM_avg$geometry)
 
+#very simply plot but can see the shape of NC in points
+
 #Plot everything
 plot(sf_EPAair_PM_avg)
+#each plot uses diff legend colors to depict diff information
 
 ```
 
@@ -236,29 +257,38 @@ plot(sf_EPAair_PM_avg)
 The `plot` command creates some quick but very rough plots. Let's return to the other plotting libraries and see how these spatial dataframes are plotted...
 
 ```{r plotting sf objects}
+#now that we have a defined geometry column, we can use it in ggplot. sf package loads a geo component into ggplot.
+
 #With geometries now available in a column, we can use ggplot with the geom_sf object
 ggplot() + 
   geom_sf(data=sf_EPAair_PM_avg, aes(color=meanPM, size=maxPM))
 
+#ggmpa allows you to bring in map backdrops with ggplot but there are licensing issues rn so using it is unstable 
+
+#in aesthetics we don't have to specify x and y columns bc it knows to do this via geometry column (we're plotting like it's on a map in space), we just define colors based on what info at each coordinate we want to show
+
 #Plot everything -- with MapView
 mapview(sf_EPAair_PM_avg)
+#only need to specify spatial dataframe for mapview to plot it
 
 #View multiple attributes with MapView
 mapview(sf_EPAair_PM_avg, 
         zcol='meanPM', 
         cex='maxPM')
+#making mapview map prettier ^
 
 #Plot with leaflet using markers
 leaflet(sf_EPAair_PM_avg) %>% 
   addProviderTiles("CartoDB.Positron") %>% 
   addMarkers(popup = ~as.character(maxPM))
-
+#popup = you click to get info rather than hovering
 
 #Plot with leaflet using circle markers
 # -First we need to create a color palette
 pal <- colorNumeric(
   palette = "Reds",
   domain = sf_EPAair_PM_avg$meanPM)
+#scaling red values based around mean PM values^
 
 # -Now we can plot 
 m <- leaflet(sf_EPAair_PM_avg) %>% 
@@ -267,7 +297,7 @@ m <- leaflet(sf_EPAair_PM_avg) %>%
     radius = ~maxPM/3,
     color = ~pal(meanPM),
     stroke = FALSE, 
-    fillOpacity = 0.9,
+    fillOpacity = 0.9, #like alpha
     label = ~as.character(maxPM))
 
 # Show the map "m"
@@ -276,6 +306,7 @@ m
 # Save the map
 library(htmlwidgets)
 #saveWidget(m, file='m.html')
+#better way to save it is via export ^ should save to output folder.
 
 ```
 
@@ -299,6 +330,7 @@ Durham_buffer <- sf_EPAair_PM_avg %>%
 
 #View the result
 mapView(Durham_buffer)
+#comes out as an oval on the map bc of coordinate reference systems. if we put the buffer on a globe, it would be a perfect circle, but we get distortion bc of flat map. 
 ```
 
 In running the above, you get an warning and the shape looks elliptical, not circular. What's up? Well, it's time to have that chat about coordinate reference systems...
@@ -409,13 +441,19 @@ Applying our knowledge of CRS, let's transform our EPA sites from its native geo
 
 ```{r Transform our data to UTM 17 and buffer it}
 #Transform the entire EPA dataset to the UTM Zone 17N crs
+
+#our dataset has a defined CRS, which we defined when we first created it in 2.4.1 (used crs = 4326 [WGS 84 CRS] in the code)
+#moving CRS to UTM one that we looked up and that matches with our location in NC
 sf_EPAair_PM_avg_UTM <- st_transform(sf_EPAair_PM_avg, crs=26917)
+# see that now our new coordinates are in METERS, referenced to origin of UTM 17
 
 #Rebuffer the Durham Armory site. Is it now circular? 
+#we buffer in meters now bc CRS coords are in meters
 DA_UTM_buffer <- sf_EPAair_PM_avg_UTM %>% 
   filter(Site.Name == 'Durham Armory') %>%     # Filter for the Durham Armory Site
   st_buffer(2000)                              # Buffer 2000 meters
 mapView(DA_UTM_buffer)                         # View the results
+#now we get a perfect circle on the map bc we are showing the buffer on a flat surface. before, we were showing it on spheroid/ellispoid surface (rounded Earth)
 ```
 
 ## 5.2 Simple spatial analyis
@@ -428,6 +466,7 @@ First, we'll again extract one feature from the EPA dataset, on here in Durham n
 
 ```{r Extract a single feature}
 #Extract the Durham Armory Point
+#subsetting the above dataframe to get one point as new df
 sf_DurhamArmory <- sf_EPAair_PM_avg_UTM %>% 
   filter(Site.Name == 'Durham Armory')
 
@@ -436,9 +475,12 @@ class(sf_DurhamArmory)
 
 #Examine its geometry
 sf_DurhamArmory$geometry
+#this type of geometry object is a point
 
 #Show the point
 mapview(sf_DurhamArmory)
+#map of our single point
+#can make geometries from a table like above or can do it from a single point, like we will for this point below:
 ```
 
 ### 5.2.2 Creating an sfc object from coordinates
@@ -451,9 +493,12 @@ grainger_sfg <- st_point(c(-78.9427,36.00465))
 
 #Examine this item
 class(grainger_sfg)
+#spatial feature geometry, which does NOT include coordinate reference system^
 
 #Convert to a sfc object, adding a coordinate reference system
 grainger_sfc <- st_sfc(grainger_sfg, crs=4326)
+#converting to simple feature class/column bc it will include CRS so we know where we are in space (geometry + reference info)
+
 
 #Examine this item
 class(grainger_sfc)
@@ -466,6 +511,7 @@ mapview(sf_DurhamArmory,
   mapview(grainger_sfc, 
           col.regions='darkblue', 
           alpha.regions=1)
+#created a map with both points we created above ^
 ```
 
 ### 5.2.3 Measure the distance between two sfc objects
@@ -476,17 +522,21 @@ mapview(sf_DurhamArmory,
 #                            y = grainger_sfc)
 
 #Oh no, an error! We forgot to transform our Grainger Hall point to the same CRS as the Armory
+#Durham Armory (above) is in meters using UTM bc we converted it earlier, but Grainger Hall is still in lat long. need coordinates to be the same scale/type if we measure distance bw them.
 
 #Transform the Grainger hall SFC to UTM Zone 17n
 grainger_sfc_utm <-  st_transform(grainger_sfc, crs=st_crs(sf_DurhamArmory))
+#rather than referring directly to the UTM CRS, can just refer to the same CRS as Durham Armory^
 
 #Check the EPSG of our transformed object; it should equal 26917
 st_crs(grainger_sfc_utm)$epsg
+#^lets us ask what the CRS is
 
 #Now, try computing distance again
 the_distance <- st_distance(x = sf_DurhamArmory,
                             y = grainger_sfc_utm,
                             by_element = TRUE)
+#note that when we view the_distance it gives us the units as well - meters
 
 #Print the results
 print(str_c("The distance between the two points is ", 

@@ -65,6 +65,10 @@ st_crs(epa_pm25_sites_sf)$epsg
 
 #Plot the data
 mapview(epa_pm25_sites_sf)
+#question - how do we change the legend lable on these maps??? this one looks messy
+
+#when we see degree for units, it's on a coordinate system - angles, not flat units like meters
+
 ```
 
 ## 2.2 Reading shapefiles into R with `sf`
@@ -77,27 +81,32 @@ Below we read in the USA counties shapefile, filtering for just the NC features 
 
 ```{r read.filtered.records.from.shapefile.to.sf.object}
 #
+#use st_read instead of something like read.csv for shape files
 counties_sf<- st_read('./Data/Spatial/cb_2018_us_county_20m.shp') %>% 
   filter(STATEFP == 37) #Filter for just NC Counties
+#this data is census data, which has a hierarchy to it. every state has a unique code within census data - NC is 37.
 
 #
 colnames(counties_sf)
 
 #
 st_crs(counties_sf) 
-
+#st_ indicates a spatial command. above
 
 #
 nrow(counties_sf)
 
 #Reveal the extent of this dataset via the st_bbox() function
 st_bbox(counties_sf)
+#creating a bounty(?) box around features?
 
 #View the data
 head(counties_sf)
 
 #Plot the data, colored by area of land in each county
-mapView(counties_sf, zcol = "AWATER")
+mapView(counties_sf, zcol = "ALAND")
+#AWATER = looking at area water
+#ALAND = looking at area land
 ```
 
 ### 2.2.2 Read in and explore 8-digit HUC watersheds for NC
@@ -105,20 +114,24 @@ mapView(counties_sf, zcol = "AWATER")
 *Now you try*: Read in the NC 8-Digit HUC dataset: `./Data/Spatial/NC_HUC8.shp` into a variable named `huc8_sf`. What CRS does this dataset use? Is it the same as the counties dataset? What columns are included in this dataset? What do these features look like on a map?
 
 ```{r read HUCs shapefile}
+#when you read in a shape file, make sure you use the .shp within the shape file (bc shape files contain multiple files)
+
 #Read the shapefile into an sf dataframe named "huc8_sf"
+huc8_sf<- st_read("./Data/Spatial/NCHUC8.shp")
 
 
 #Reveal the columns
-
+colnames(huc8_sf)
 
 #Check the CRS
-
+st_crs(huc8_sf)
+#CRS = WGS 84 - diff from above CRS
 
 #Examine some records
-
+head(huc8_sf)
 
 #View the data as a map, colored by the acreage in each
-
+mapView(huc8_sf, zcol = "ACRES")
 
 ```
 
@@ -148,6 +161,9 @@ This a link to a spatial dataset in GeoJSON format. Now let's read this dataset 
 
 ```{r load.geojson.data}
 powerplants_sf <- st_read('https://opendata.arcgis.com/datasets/ee0263bd105d41599be22d46107341c3_0.geojson')
+#^this web address comes from going to the API tab in an open data source page for a specific dataset
+
+#JSON data is constructed to share via the web. most data pulled through web is text, and this data type is written as text. so JSON is a shape file written out as text.
 
 #Reveal the field names
 colnames(powerplants_sf)
@@ -157,23 +173,26 @@ nrow(powerplants_sf)
 
 #View on a map - specify the geometry column to draw faster
 mapview(powerplants_sf$geometry)
+#can see there are a lot of powerplants. rn have whole of US. filter for NC below.
 
 #Filter for just powerplants found in NC
 nc_powerplants_sf <- powerplants_sf %>% 
   filter(STATE == "NC") 
 
 #Have a look the variety of types (and number of each)
+#counting different types of powerplants belwow:
 nc_powerplants_sf %>% 
   st_drop_geometry() %>% 
   count(TYPE, sort=TRUE)
 
-#Most are solar farms; let's remove those
+#Most are solar farms (solar photvoltaic); let's remove those
 nc_powerplants_sf <- nc_powerplants_sf %>% 
   filter(TYPE != "SOLAR PHOTOVOLTAIC")
 
 # Examine counts by fuel type
 ggplot(nc_powerplants_sf) + 
   geom_sf(aes(color = PRIM_FUEL)) 
+#can tell it's in shape of NC
 ```
 
 # 3. WORKING WITH SPATIAL DATA
@@ -192,15 +211,23 @@ We'll focus on just a few variables: Estimates of people in poverty ("E_POV") an
 
 ```{r join.attributes.to.spatial features}
 #Read the 2018 SVI county-level dataset for NC
+#this is a tabular dataset, NOT spatial:
 svi2018_nc_raw <- read.csv(
   'https://svi.cdc.gov/Documents/Data/2018_SVI_Data/CSV/States_Counties/NorthCarolina_COUNTY.csv',
   colClasses = c('FIPS' = 'factor')) %>% 
   select(COUNTY, FIPS, LOCATION, E_TOTPOP, E_POV, E_MINRTY)
+#colClasses argument lets us specify class of data for specific columns. here we say FIPS column contains factors. FIPS is county # and we want this to be a factor and not numeric.
+
+
 
 #Check structure
 str(svi2018_nc_raw)
 
-#Join the SVI attributes to the county spatial features
+# we can't map this bc it doesn't have geometry column. so we want to join these attributes/features to our county features (that has geo column)
+
+#use merge and join to add attributes to our spatial data (versus bind for adding attribute columns in normal dfs). have to specify which fields are in common bw 2 datasets (GEOID and FIPS)
+
+#Join the SVI attributes to the county spatial features (base R version of join)
 counties_sf_join <-  merge(x = counties_sf,
                            y = svi2018_nc_raw, 
                            by.x = "GEOID", 
@@ -215,30 +242,42 @@ mapview(counties_sf_join,
         zcol = 'E_POV', 
         col.regions = brewer.pal(2, 'RdBu')) + 
   mapview(epa_pm25_sites_sf, cex = 'maxPM')
+#specified join, colored by people in poverty. then added EPA sites map on top, sized by max PM
 
 #view with ggplot
 ggplot() + 
   geom_sf(data=counties_sf_join,aes(fill = E_POV),alpha=0.3) + 
   scale_fill_gradient2(low="red",high="blue",midpoint = 60000) + 
   geom_sf(data=epa_pm25_sites_sf)
+#geom_sf gives us the geo component (map)
 
 ```
 
 *Now you try*: The URL '<https://raw.githubusercontent.com/ENV859/EnviroAtlasData/main/Wind_Energy.csv>' links to EPA's EnviroAtlas data on the amount of wind energy estimated at the HUC12 scale. You need to load this data, group by HUC8 (computing the sum wind energy of each HUC12 in a given HUC8) and join with the HUC 8 spatial features dataset. \* Be sure, as above, you read in the `HUC_12` column as a factor so it doesn't default to a numeric column.
 
 ```{r}
+#download dataset from online and import it using read.csv, then group by huc8 level. make sure huc12 is brought in as a factor, not numeric. link this with our huc8_sf - join them and see if we can map them to view
 #Compute HUC8 wind energy
+wind_energy_huc8 <- read.csv("https://raw.githubusercontent.com/ENV859/EnviroAtlasData/main/Wind_Energy.csv", colClasses = c("HUC_12" = "factor")) %>%
+  mutate(HUC_8 = substr(HUC_12, 1, 8)) %>%
+  group_by(HUC_8) %>%
+  summarize(kWhkm2day= sum(kWhkm2day))
+#above there actually wasn't a huc_8 so we had to make one by going into huc_12 and choosing 1-8 from it (versus normal would be 1-12)
 
-
-
-
+ 
 #Join to HUC_8 features
+huc8_sf_wind <- merge(x=huc8_sf, 
+                     y = wind_energy_huc8, 
+                     by.x = "HUC_8", 
+                     by.y = "HUC_8")
+#huc8_sf_wind <- huc8_sf %>%
+#  left_join(wind_energy_huc8, by = c("HUC_8", "HUC_8"))
 
-
-
+#above merge is a full join (grab all kinds of records w/o corresponding HUCs). here, it's better to use tidy approach
 
 #View the outputs
-
+mapview(huc8_sf_wind, 
+        zcol= "kWhkm2day")
 
 
 ```
@@ -251,9 +290,12 @@ In our case, all of our county features share the same "STATEFP" value, so we'll
 
 ```{r Dissolve all counties into a single feature}
 #Aggregate the data using group_by and summarize, just as you would a non-spatial dataframe
+#grouping by STATEFP (number for census tract) - makes all counties into one single feature
+#summarize by total area of land in all of NC
 state_sf <- counties_sf %>% 
   group_by('STATEFP') %>% 
   summarize(ALAND = sum(ALAND))
+#so now we just have one big geo point
 
 #View the data
 mapview(state_sf)
@@ -263,8 +305,13 @@ mapview(state_sf)
 
 ```{r Aggregate the HUC data on an attribute, saving as huc2_sf}
 #List the unique values in the DWQ_Basin field
+unique(huc8_sf$DWQ_Basin)
 
-
+#create a new field for huc2 using substring command like above and dissolve it so we see all huc2s together
+huc2_sf <- huc8_sf %>%
+  group_by(DWQ_Basin) %>%
+  summarize(ACRES = sum(ACRES)) %>%
+  summarize(SQ_MILES = sum(SQ_MILES))
 
 
 #Summarize on DWQ Basin value
@@ -274,7 +321,7 @@ mapview(state_sf)
 
   
 #Map the data
-
+mapview(huc2_sf)
 ```
 
 ## 3.2 Transforming coordinate reference systems of datasets
@@ -298,12 +345,14 @@ What I'm getting at is: it's often a good idea to project data before doing spat
 On top of projecting any geographic data to adjust for the limitations of the software, you'll also be wise to ensure all use the same CRS. This can be done with the `st_transform` command, supplying the EPSG code of the CRS that you want your data to be in. Let's get our main five sf objects all into a consistent CRS.
 
 ```{r Transform the datasets to other coordinate reference systems}
+#converting to planar so R can do correct math and functions
 #Convert all to UTM Zone 17 (crs = 26917)
 epa_sf_utm <-      st_transform(epa_pm25_sites_sf, crs = 26917)
 counties_sf_utm <- st_transform(counties_sf, crs = 26917)
 state_sf_utm <-    st_transform(state_sf,crs = 26917)
 huc8_sf_utm <-     st_transform(huc8_sf, crs = 26917)
 huc2_utm <-        st_transform(huc2_sf, crs = 26917)
+#26917 is specific to NC
 ```
 
 ## 3.3 Clipping and intersecting data
