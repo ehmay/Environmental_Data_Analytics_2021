@@ -130,7 +130,8 @@ Study question: Have ozone concentrations changed over the 2010s at this station
 ```{r}
 #8
 GaringerOzone.3 <- GaringerOzone %>%
-  mutate(Daily.Max.8.hour.Ozone.Concentration = zoo::na.approx(Daily.Max.8.hour.Ozone.Concentration)) %>%
+  mutate(Daily.Max.8.hour.Ozone.Concentration =
+           zoo::na.approx(Daily.Max.8.hour.Ozone.Concentration)) %>%
   mutate(DAILY_AQI_VALUE = zoo::na.approx(DAILY_AQI_VALUE))
 
 summary(GaringerOzone.3)
@@ -144,16 +145,11 @@ summary(GaringerOzone.3)
 
 ```{r}
 #9
-# new dataframe
-#add column for yr via pulling from data via lubridate year
-#same as above but for month
-# avg mean ozone concentrations for each month in each year (avg of 8hr ozone conc across all of X month within Y year)
 
 
 GaringerOzone.monthly <- GaringerOzone.3 %>%
   mutate(Month = month(Date)) %>%
   mutate(Year = year(Date)) %>%
-  #unite("Date", Month:Year, remove=FALSE) %>%
   mutate(Date = my(paste0(Month,"-",Year))) %>%
   select(Daily.Max.8.hour.Ozone.Concentration, Date) %>%
   group_by(Date) %>%
@@ -171,19 +167,21 @@ GaringerOzone.daily <-
   GaringerOzone.3 %>%
   select(Date,Daily.Max.8.hour.Ozone.Concentration)
 
-#fday <- day(first(GaringerOzone.daily$Date))
 fmonth <- month(first(GaringerOzone.daily$Date))
 fyear <- year(first(GaringerOzone.daily$Date))
 
 #lday <- day(last(GaringerOzone.daily$Date))
-lmonth <- month(last(GaringerOzone.daily$Date))
-lyear <- year(last(GaringerOzone.daily$Date))
+#lmonth <- month(last(GaringerOzone.daily$Date))
+#lyear <- year(last(GaringerOzone.daily$Date))
 
-#R should automatically stop at the most recent date in the dataset - specifying end dates makes the TS wonky and seems to add elemnents and make its dimensions larger than the df, so not specifying end dates here. 
+#R should automatically stop at the most recent date in the dataset - specifying end
+#dates makes the daily TS too short - I discussed with Luana and Abhishek but can't
+#figure out what's going on. I left in my code for lday, lmonth, and lyear which I
+#would include in the same manner as start below, so you can see what I attemped to
+#do. But it makes the TS only 3297 rather than 3652 elements long.
 
-GaringerOzone.daily_ts <- ts(GaringerOzone.daily$Daily.Max.8.hour.Ozone.Concentration, start = c(fyear, fmonth), end = c(lyear, lmonth), frequency = 365)
-
-#end = c(lyear, lmonth, lday)
+GaringerOzone.daily_ts <- ts(GaringerOzone.daily$Daily.Max.8.hour.Ozone.Concentration, 
+                             start = c(fyear, fmonth),frequency = 365)
 
 fmonth2 <- month(first(GaringerOzone.monthly$Date))
 fyear2 <- year(first(GaringerOzone.monthly$Date))
@@ -191,7 +189,9 @@ fyear2 <- year(first(GaringerOzone.monthly$Date))
 lmonth2 <- month(last(GaringerOzone.monthly$Date))
 lyear2 <- year(last(GaringerOzone.monthly$Date))
 
-GaringerOzone.monthly_ts <- ts(GaringerOzone.monthly$mean.oz, start = c(fyear2, fmonth2), end = c(lyear2, lmonth2), frequency = 12)
+GaringerOzone.monthly_ts <- ts(GaringerOzone.monthly$mean.oz, 
+                               start = c(fyear2, fmonth2), end = c(lyear2, lmonth2),
+                               frequency = 12)
 
 ```
 

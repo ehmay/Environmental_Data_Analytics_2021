@@ -307,14 +307,12 @@ mapview(state_sf)
 #List the unique values in the DWQ_Basin field
 unique(huc8_sf$DWQ_Basin)
 
-#create a new field for huc2 using substring command like above and dissolve it so we see all huc2s together
+
+#dissolving boundary bw different areas, and updating the area by taking sum of acres and square miles
+
 huc2_sf <- huc8_sf %>%
   group_by(DWQ_Basin) %>%
-  summarize(ACRES = sum(ACRES)) %>%
-  summarize(SQ_MILES = sum(SQ_MILES))
-
-
-#Summarize on DWQ Basin value
+  summarize(ACRES = sum(ACRES), SQ_MILES = sum(SQ_MILES))
 
 
 
@@ -353,6 +351,7 @@ state_sf_utm <-    st_transform(state_sf,crs = 26917)
 huc8_sf_utm <-     st_transform(huc8_sf, crs = 26917)
 huc2_utm <-        st_transform(huc2_sf, crs = 26917)
 #26917 is specific to NC
+#now everything is in meters so we're good to go for plotting via planar coordinates so it looks correct on the map in terms of distances etc
 ```
 
 ## 3.3 Clipping and intersecting data
@@ -376,24 +375,34 @@ myMap = mapview(neuse_sf,
 myMap
 
 #Select intersecting counties using matrix subsetting
+#subsetting: getting everything that intersects our shape from above
 neuse_intersect_1 <- counties_sf_utm[neuse_sf,]
 
-#Select intersecting counties using the `filter()` command
+#Select intersecting counties using the `filter()` command - doing same thing as above but using tidy package. within our filter, apply st_intersects command
 neuse_intersect_2 <- counties_sf_utm %>% 
   filter(st_intersects(x = ., y = neuse_sf, sparse = FALSE))
 
+#we have 23 counties that subsect the shape on map
 #View the result
 myMap + mapview(neuse_intersect_2, alpha.regions = 0)
+#spatial overlay of counties over the Neuse basin
 
 #Actually intersect the counties (not just select those that intersect)
+st_crs(neuse_sf)$epsg
+st_crs(counties_sf_utm)$epsg
+mapview(neuse_sf)
+mapview(counties_sf_utm)
+mapview(neuse_counties_sf)
+
 neuse_counties_sf <- neuse_sf %>% 
   st_intersection(counties_sf_utm)
 myMap + mapview(neuse_counties_sf, alpha.regions = 0)
+#for me the counties lose their outline here? so I just got the original shape outlined??
 
 #Update the area the features, now that some are clipped
 neuse_counties_sf <- neuse_counties_sf %>% 
-  mutate(Area_m2 = st_area(neuse_counties_sf$geometry)) %>% 
-  as.numeric()
+  mutate(Area_m2 = as.numeric(st_area(neuse_counties_sf$geometry)))
+#John will fix this code, map doesn't work rn
 mapview(neuse_counties_sf, zcol='Area_m2')
 
 ```
@@ -402,18 +411,21 @@ mapview(neuse_counties_sf, zcol='Area_m2')
 
 ```{r EXERCISE: Clipping}
 #Select the Triangle County from the 
-
+the_triangle <- counties_sf_utm %>%
+  filter(NAME %in% c("Chatham", "Durham", "Orange", "Wake"))
 
 
   
 #Grab the intersecting HUC_8s
+the_hucs <- huc8_sf_utm[the_triangle, ]
 
-
-
+mapview(the_hucs) + mapview(the_triangle, alpha.regions = 0, color = "red")
 #Intersect the HUC_8s
-
-
-
+the_huc_clip <- huc2_utm %>%
+  st_intersection(the_triangle)
+  
+mapview(the_huc_clip) + mapview(the_triangle, alpha.regions = 0, color = "red")
+#mine doesn't show purple fill???
 
 ```
 
@@ -424,7 +436,7 @@ Now that our data are all in a common planar coordinate systems, let's examine w
 Here, we'll explore some of these operations on spatial features so you can get a feel for how they work. - Extract centroids of features - Buffering features - Union many features to a single multi-part features - Compute convex hulls from multi-part features - Compute Voronoi polygons from multi-part features
 
 ```{r}
-#Select the triangle counties into a new sf data frame
+#Select the triangle counties into a new sf data frame using filter in a pipe
 triCo <- counties_sf_utm %>% 
   filter(NAME %in% c("Durham","Wake", "Orange", "Chatham")) 
 
@@ -434,14 +446,17 @@ myMap = ggplot() +
 myMap
 
 #Extract the centroids of the selected features and show them
+#calculating the centroid (center of gravity) for each geometry - converts polygons into points
 triCo_centroids <-  st_centroid(triCo)
 myMap <- myMap + geom_sf(data = triCo_centroids, color = 'blue')
 myMap
 
-#Buffer the centroids outward 2km and add them to our
+#Buffer the centroids outward 2km and add them to our map
+#applying buffer of 2000m around centroids
 triCo_centroids_2km <- st_buffer(triCo_centroids, 2000)
 myMap <- myMap + geom_sf(data = triCo_centroids_2km, color = 'orange', fill=NA)
 myMap
+#if it's a polygon feature you can also specify a negative value and it will buffer inside the polygon (below)
 
 #Buffer the counties inward 2km
 triCo_in2km <- st_buffer(triCo, -2000)
@@ -449,6 +464,7 @@ myMap <- myMap + geom_sf(data = triCo_in2km, color = 'green', fill=NA)
 myMap
 
 #Combine the centroids into one feature and construct a convex hull around them
+
 triCo_centroids_chull <- triCo_centroids %>% 
   st_union() %>% 
   st_convex_hull()
@@ -456,6 +472,7 @@ myMap <- myMap + geom_sf(data = triCo_centroids_chull, color = 'red', fill=NA)
 myMap
 
 #Combine the centroids into one feature and draw voronoi polygons
+#voronoi polygons are helpful for interpolation
 triCo_centroids_voronoi <- triCo_centroids %>% 
   st_union() %>% 
   st_voronoi()
@@ -469,16 +486,21 @@ myMap
 We can also use location to select features.
 
 ```{r Select the county in which user provided lat/long pair is found}
+#if we want to select based on a user-specified point
+
 #User coordinates
 userLat = 36.0045442
 userLng = -78.9426381
 
+#start by specifying raw geometry
 #Create a simple features point geometry from the point
 theSite_sfp <- st_point(c(userLng,userLat))
 
+#then move to SFC (simple feature - geometry + CRS)
 #Create a simple features column from the point geometry object
 theSite_sfc <- st_sfc(theSite_sfp, crs = 4326)
 
+#take from lat long and move to UTM so it is projected
 #Transform the mask to match the CRS of the counties dataset
 theSite_sfc_transformed <- st_transform(theSite_sfc, crs = st_crs(counties_sf_utm))
 
@@ -493,15 +515,21 @@ selCounties <- counties_sf_utm[resultMask,]
 #Map the results
 mapView(counties_sf[resultMask,])
 
+#so we can see which counties this falls into
 ```
 
 > Questions: how might we use the `st_buffer` function to show all counties within 30km of the site?
 
 ```{r Select counties within a 30 km area from the site}
+site_30km <- st_buffer(theSite_sfc_transformed,30000)
 
+resultMask_30km <- st_intersects(counties_sf_utm, 
+                                   site_30km,
+                                   sparse=FALSE)
 
-
-                            
+selCounties_30km <- counties_sf_utm[resultMask_30km, ]
+ 
+mapview(selCounties_30km)                           
 ```
 
 # 4. VISUALIZATION
@@ -513,12 +541,15 @@ Lastly, let's take a deeper dive into the various ways to visualize our spatial 
 When we import sf, we add the `geom_sf` option to ggplot. This geometry works much like other geoms, but with a few additional options. Here we see that order of plotting is important.
 
 ```{r Vsualizing mulitple dataset with ggplot}
+#when constructing any plot but especially maps, the order is VERY IMPORTANT
+
 #Wrong order
 ggplot()  +
   geom_sf(data = epa_sf_utm, color='white', size=2) +
   geom_sf(data = counties_sf_utm, aes(fill = ALAND), color = 'white')  +
   geom_sf(data = state_sf_utm, color='red',size=2) + 
   scale_fill_gradient(low="yellow", high="darkgreen")
+#above: state boundary is last so it masks everything. below it's first
 
 #Right order
 ggplot() +
@@ -536,6 +567,7 @@ Leaflet is the most powerful of the three. However it requires getting all our d
 
 ```{r transform.data.back.to.WSG84}
 # Convert all to WGS84 (crs=4326)
+#leaflet prefers WGS84 CRS
 EPAair_wgs84 <- st_transform(epa_pm25_sites_sf, c=4326)
 counties_WGS84 <- st_transform(counties_sf_utm, c=4326)
 state_WGS84 <- st_transform(state_sf,c=4326)
@@ -553,6 +585,8 @@ leaflet() %>% addTiles() %>%
 Tip: See <http://leaflet-extras.github.io/leaflet-providers/> for other basemaps
 
 ```{r Visualizing multiple datasets with leaflet}
+#change basemaps with tiles - can look at basemaps on above link
+
 leaflet() %>% 
   addProviderTiles(providers$Esri.DeLorme) %>%  
   addPolygons(data = counties_WGS84, 
@@ -595,9 +629,10 @@ m2 <- leaflet() %>%
 #install.packages("leafsync")
 library(leafsync)
 
-#Create an lattice view of the two leaflet maps
+#Create an lattice view of the two leaflet maps side by side
 latticeview(m1, m2)
 
-#Create a synchronized view...
+#Create a synchronized view... - can move around maps at same time in same place
 sync(m1,m2)
+#can save synced maps as a webpage to send to anyone
 ```
